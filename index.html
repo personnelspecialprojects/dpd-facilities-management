@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>DPD Facilities Management</title>
+<script>
+  // Release manifest. Update this and the ?v= values below with every release.
+  window.FM_PAGE_VERSION = "2026.10.21-2";
+  window.FM_EXPECTED_VERSIONS = {
+    "activity.js": "2026.10.21-1",
+    "admin.js": "2026.10.21-1",
+    "audit.js": "2026.10.21-1",
+    "checks.js": "2026.10.21-2",
+    "config.js": "2026.10.21-2",
+    "core.js": "2026.10.21-1",
+    "reports.js": "2026.10.21-2",
+    "setup-check.js": "2026.10.21-1",
+    "styles.css": "2026.10.21-2",
+    "work.js": "2026.10.21-1"
+  };
+</script>
+<link rel="stylesheet" href="styles.css?v=2026.10.21-2">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">FM</div>
+    <div><div class="brand-name">DPD Facilities Management</div><div class="brand-sub">Dallas Police Department</div></div>
+  </div>
+  <div class="user-box" id="user-box" hidden>
+    <span id="user-name"></span>
+    <button class="btn ghost" id="btn-signout">Sign out</button>
+  </div>
+</header>
+<div id="banner-area"></div>
+<nav id="tabs" class="tabs" hidden></nav>
+
+<main>
+  <section class="screen" id="screen-loading"><div class="screen-card"><div class="spinner"></div><p class="screen-msg">Loading…</p></div></section>
+  <section class="screen" id="screen-signin" hidden>
+    <div class="screen-card">
+      <h1>DPD Facilities Management</h1>
+      <p>Sign in with your city account to continue.</p>
+      <button class="btn primary big" id="btn-signin">Sign in</button>
+    </div>
+  </section>
+  <section class="screen" id="screen-denied" hidden><div class="screen-card"><h1>No access</h1><p class="screen-msg"></p></div></section>
+  <section class="screen" id="screen-error" hidden><div class="screen-card"><h1>Something went wrong</h1><p class="screen-msg"></p><button class="btn" onclick="location.reload()">Reload</button></div></section>
+  <section class="screen" id="screen-app" hidden></section>
+
+  <section class="tab" id="tab-dashboard" hidden>
+    <div class="dash">
+      <div class="dash-left"><div class="panel" id="checks-panel"></div></div>
+      <div class="dash-right">
+        <div class="panel" id="activity-panel"></div>
+        <div class="panel" id="mywork-panel"></div>
+      </div>
+    </div>
+  </section>
+  <section class="tab" id="tab-work" hidden><div class="panel" id="work-panel"></div></section>
+  <section class="tab" id="tab-reports" hidden><div class="panel" id="reports-panel"></div></section>
+  <section class="tab" id="tab-audit" hidden><div class="panel" id="audit-panel"></div></section>
+  <section class="tab" id="tab-admin" hidden><div class="panel" id="admin-panel"></div></section>
+</main>
+
+<div id="modal-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
+<script src="config.js?v=2026.10.21-2"></script>
+<script src="core.js?v=2026.10.21-1"></script>
+<script src="activity.js?v=2026.10.21-1"></script>
+<script src="admin.js?v=2026.10.21-1"></script>
+<script src="audit.js?v=2026.10.21-1"></script>
+<script src="checks.js?v=2026.10.21-2"></script>
+<script src="reports.js?v=2026.10.21-2"></script>
+<script src="setup-check.js?v=2026.10.21-1"></script>
+<script src="work.js?v=2026.10.21-1"></script>
+<script>
+  (function () {
+    if (window.FM && window.FM.boot) { window.FM.boot(); return; }
+    var b = document.getElementById("banner-area");
+    b.innerHTML = '<div class="banner warn"><span>core.js or config.js didn\'t load (missing or cut off). Re-paste it in GitHub, wait a minute, then reload.</span></div>';
+    document.getElementById("screen-loading").hidden = true;
+  })();
+</script>
+</body>
+</html>
