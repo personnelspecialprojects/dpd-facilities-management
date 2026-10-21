@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["activity.js"] = "2026.10.21-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["activity.js"] = "2026.10.21-4";
 
 /*
  * Task logging (Dashboard, right side). Task types are set up in Admin.
@@ -20,7 +20,12 @@
   async function load() {
     var day = FM.ymd(new Date());
     var start = FM.startOfDay(day);
-    S.rows = await FM.sp.getAll(L.activity, { $select: SELECT, $filter: "LoggedAt ge " + FM.odataDate(start) });
+    try {
+      S.rows = await FM.sp.getAll(L.activity, { $select: SELECT, $filter: "LoggedAt ge " + FM.odataDate(start) });
+    } catch (e) {
+      FM.panelError(panel(), "Tasks", e);
+      return;
+    }
     S.day = day;
     render();
   }
@@ -29,7 +34,9 @@
     var el = panel(); if (!el) return;
     var quick = quickTypes(), tracked = trackedTypes();
     var html = '<div class="panel-head"><h2>Tasks</h2></div>';
-    if (!quick.length && !tracked.length) {
+    if (FM.state.loadErrors.taskTypes) {
+      html += '<div class="load-error">The task types couldn\'t be loaded. See the message at the top of the page.</div>';
+    } else if (!quick.length && !tracked.length) {
       html += '<div class="empty">No task types are set up yet. ' + (FM.state.isAdmin ? "Add them in Admin → Task types." : "Ask an admin to add them.") + "</div>";
     }
     if (quick.length) {

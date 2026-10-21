@@ -1,5 +1,5 @@
 /* Release stamp: read by core.js. Keep this rule first and update it with each release. */
-.fm-css-v-2026_10_21-2 { --fm-release: 1; }
+.fm-css-v-2026_10_21-4 { --fm-release: 1; }
 
 :root {
   --navy: #0b2545;
@@ -93,6 +93,10 @@ body.save-blocked [data-save] { opacity: .5; pointer-events: none; }
 .dash { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
 @media (max-width: 1050px) { .dash { grid-template-columns: 1fr; } }
 .note { background: #eef3fb; border-left: 3px solid var(--navy-3); padding: 8px 12px; border-radius: 4px; margin-bottom: 12px; color: var(--navy-2); }
+#load-errors { max-width: 1600px; margin: 0 auto; padding: 16px 20px 0; }
+.load-error { background: var(--bad-bg); color: var(--bad); border: 1px solid #e3b4b4; border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; }
+.load-error ul { margin: 6px 0 8px; padding-left: 18px; }
+.load-error .btn { color: var(--bad); }
 .empty { color: var(--muted); padding: 14px; text-align: center; background: #f7f9fb; border-radius: 6px; }
 .small { font-size: 12px; }
 .muted { color: var(--muted); }

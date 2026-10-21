@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["setup-check.js"] = "2026.10.21-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["setup-check.js"] = "2026.10.21-4";
 
 /*
  * Admin -> SharePoint setup check. Compares every FM list against
@@ -28,6 +28,22 @@
 
   FM.runSetupCheck = async function () {
     var out = [];
+    // Which site the app is talking to, and whether this account can add and edit items there.
+    try {
+      var web = await FM.sp.raw(C.siteUrl + "/_api/web?$select=Title,Url");
+      out.push({ level: "ok", list: "(site)", item: "Site", msg: "Connected to \"" + web.Title + "\" at " + web.Url });
+      try {
+        var perms = await FM.sp.raw(C.siteUrl + "/_api/web/effectiveBasePermissions");
+        var low = Number(perms && perms.Low);
+        if (!isNaN(low)) {
+          var canAdd = (low & 0x2) !== 0, canEdit = (low & 0x4) !== 0;
+          out.push({ level: canAdd && canEdit ? "ok" : "warn", list: "(site)", item: "Your access", msg: "Add items: " + (canAdd ? "yes" : "no") + " · Edit items: " + (canEdit ? "yes" : "no") + " (site level; list permissions can differ)" });
+        }
+      } catch (e) { /* optional */ }
+    } catch (e) {
+      out.push({ level: "error", list: "(site)", item: "Site", msg: "Couldn't reach " + C.siteUrl + " (" + e.message + "). Check siteUrl in config.js." });
+      return out;
+    }
     var keys = Object.keys(C.schema);
     await FM.pool(keys, async function (key) {
       var list = C.lists[key], spec = C.schema[key];
@@ -41,7 +57,7 @@
       }
       var fields;
       try {
-        var r = await FM.sp.raw(base + "/fields?$select=InternalName,Title,TypeAsString,Choices,RichText,Indexed,Hidden,ReadOnlyField");
+        var r = await FM.sp.raw(base + "/fields");
         fields = (r && r.value) || [];
       } catch (e) {
         out.push({ level: "error", list: list, item: "Columns", msg: "Couldn't read the columns (" + e.message + ")." });
@@ -96,7 +112,7 @@
       }
     });
     var order = { error: 0, security: 1, warn: 2, ok: 3 };
-    var listOrder = Object.keys(C.lists).map(function (k) { return C.lists[k]; });
+    var listOrder = ["(site)"].concat(Object.keys(C.lists).map(function (k) { return C.lists[k]; }));
     out.sort(function (a, b) { return order[a.level] - order[b.level] || listOrder.indexOf(a.list) - listOrder.indexOf(b.list); });
     return out;
   };

@@ -7,21 +7,23 @@
 <title>DPD Facilities Management</title>
 <script>
   // Release manifest. Update this and the ?v= values below with every release.
-  window.FM_PAGE_VERSION = "2026.10.21-3";
+  window.FM_PAGE_VERSION = "2026.10.21-4";
   window.FM_EXPECTED_VERSIONS = {
-    "activity.js": "2026.10.21-1",
-    "admin.js": "2026.10.21-1",
+    "activity.js": "2026.10.21-4",
+    "admin.js": "2026.10.21-4",
     "audit.js": "2026.10.21-1",
-    "checks.js": "2026.10.21-2",
-    "config.js": "2026.10.21-2",
-    "core.js": "2026.10.21-3",
+    "checks.js": "2026.10.21-4",
+    "config.js": "2026.10.21-4",
+    "core.js": "2026.10.21-4",
     "reports.js": "2026.10.21-2",
-    "setup-check.js": "2026.10.21-1",
-    "styles.css": "2026.10.21-2",
-    "work.js": "2026.10.21-1"
+    "setup-check.js": "2026.10.21-4",
+    "styles.css": "2026.10.21-4",
+    "work.js": "2026.10.21-4"
   };
 </script>
-<link rel="stylesheet" href="styles.css?v=2026.10.21-2">
+<link rel="stylesheet" href="styles.css?v=2026.10.21-4">
+<script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"
+  onerror="this.onerror=null;var s=document.createElement('script');s.src='https://alcdn.msftauth.net/browser/2.35.0/js/msal-browser.min.js';document.head.appendChild(s);"></script>
 </head>
 <body>
 <header class="topbar">
@@ -36,6 +38,7 @@
 </header>
 <div id="banner-area"></div>
 <nav id="tabs" class="tabs" hidden></nav>
+<div id="load-errors" hidden></div>
 
 <main>
   <section class="screen" id="screen-loading"><div class="screen-card"><div class="spinner"></div><p class="screen-msg">Loading…</p></div></section>
@@ -49,7 +52,6 @@
   </section>
   <section class="screen" id="screen-denied" hidden><div class="screen-card"><h1>No access</h1><p class="screen-msg"></p></div></section>
   <section class="screen" id="screen-error" hidden><div class="screen-card"><h1>Something went wrong</h1><p class="screen-msg"></p><button class="btn" onclick="location.reload()">Reload</button></div></section>
-  <section class="screen" id="screen-app" hidden></section>
 
   <section class="tab" id="tab-dashboard" hidden>
     <div class="dash">
@@ -69,16 +71,15 @@
 <div id="modal-root"></div>
 <div id="toast-root" aria-live="polite"></div>
 
-<script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
-<script src="config.js?v=2026.10.21-2"></script>
-<script src="core.js?v=2026.10.21-3"></script>
-<script src="activity.js?v=2026.10.21-1"></script>
-<script src="admin.js?v=2026.10.21-1"></script>
+<script src="config.js?v=2026.10.21-4"></script>
+<script src="core.js?v=2026.10.21-4"></script>
+<script src="activity.js?v=2026.10.21-4"></script>
+<script src="admin.js?v=2026.10.21-4"></script>
 <script src="audit.js?v=2026.10.21-1"></script>
-<script src="checks.js?v=2026.10.21-2"></script>
+<script src="checks.js?v=2026.10.21-4"></script>
 <script src="reports.js?v=2026.10.21-2"></script>
-<script src="setup-check.js?v=2026.10.21-1"></script>
-<script src="work.js?v=2026.10.21-1"></script>
+<script src="setup-check.js?v=2026.10.21-4"></script>
+<script src="work.js?v=2026.10.21-4"></script>
 <script>
   (function () {
     if (window.FM && window.FM.boot) { window.FM.boot(); return; }

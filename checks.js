@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["checks.js"] = "2026.10.21-2";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["checks.js"] = "2026.10.21-4";
 
 /*
  * Security checks board (Dashboard, left side).
@@ -20,7 +20,13 @@
 
   async function load(day) {
     var seq = ++S.loadSeq;
-    var rows = await FM.sp.getAll(L.checks, { $select: SELECT, $filter: "BoardDay eq " + FM.odataStr(day) });
+    var rows;
+    try {
+      rows = await FM.sp.getAll(L.checks, { $select: SELECT, $filter: "BoardDay eq " + FM.odataStr(day) });
+    } catch (e) {
+      if (seq === S.loadSeq) FM.panelError(panel(), "Security checks", e);
+      return;
+    }
     if (seq !== S.loadSeq) return;
     S.day = day;
     S.rows = rows;
@@ -73,7 +79,9 @@
       "</div></div>";
     html += '<div class="small muted" style="margin:-6px 0 10px">' + FM.esc(FM.fmtDayLong(S.day)) + "</div>";
     if (!isToday) html += '<div class="note">You\'re looking at a past day. Use <b>Manual entry</b> for a check that was done but not logged, or <b>Couldn\'t check</b> to explain one that wasn\'t done.</div>';
-    if (!anyZones) {
+    if (FM.state.loadErrors.zones) {
+      html += '<div class="load-error">The zones couldn\'t be loaded. See the message at the top of the page.</div>';
+    } else if (!anyZones) {
       html += '<div class="empty">No zones are set up yet. ' + (FM.state.isAdmin ? "Add them in Admin → Zones." : "Ask an admin to add them.") + "</div>";
     }
     C.watches.forEach(function (w, i) {

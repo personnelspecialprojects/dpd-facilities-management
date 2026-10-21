@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.21-2";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.21-4";
 
 /*
  * DPD Facilities Management: environment values, list names and column specs.
@@ -10,15 +10,16 @@
 window.FM_CONFIG = {
   appName: "DPD Facilities Management",
 
-  // Copy these two values from the Personnel Support portal's config.js
-  // (same Azure AD app registration).
-  clientId: "0d384d2a-9a9e-46f6-a195-ad63f9e94f06",          // PatrolBidPortal registration
+  // Same Azure AD app registration as the Personnel Support portal
+  // (PatrolBidPortal). These IDs aren't secrets.
+  clientId: "0d384d2a-9a9e-46f6-a195-ad63f9e94f06",
   tenantId: "2935709e-c10c-4809-a302-852d369f8700",
-  authority: "https://login.microsoftonline.com/2935709e-c10c-4809-a302-852d369f8700",
-  
+  // Must match the SPA redirect URI registered in Azure exactly (trailing slash).
+  redirectUri: "https://personnelspecialprojects.github.io/dpd-facilities-management/",
+
+  // The SharePoint site itself: no trailing slash, no /SitePages/... part.
   siteUrl: "https://dallastxgov.sharepoint.com/sites/PatrolBid",
-  spScope: "https://dallastxgov.sharepoint.com/AllSites.Write",
-  graphScope: "User.Read",
+  loginScope: "User.Read",
 
   pollSeconds: 60,
   staleCheckSeconds: 180,

@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["admin.js"] = "2026.10.21-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["admin.js"] = "2026.10.21-4";
 
 /*
  * Admin tab: zones, task types, team access, settings, setup check.
@@ -282,12 +282,22 @@
     });
   }
 
+  // Opens Admin -> SharePoint setup and runs the check (from error messages).
+  async function openSetup() {
+    S.sub = "setup";
+    render();
+    try { S.setupResults = await FM.runSetupCheck(); } catch (e) { FM.error(e); }
+    render();
+  }
+
   FM.modules.admin = {
     init: function () { panel().addEventListener("click", onClick); },
     state: S,
-    render: render
+    render: render,
+    openSetup: openSetup
   };
   FM.onTab("admin", function () {
+    render();
     return Promise.all([FM.loadMembers(), FM.loadReference()]).then(render);
   });
 })();

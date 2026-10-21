@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["work.js"] = "2026.10.21-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["work.js"] = "2026.10.21-4";
 
 /*
  * Tracked work: multi-step items (work orders and the like) with
@@ -403,12 +403,18 @@
     refresh: refreshTab
   };
 
-  FM.onTab("dashboard", function () { return loadOpen().then(renderMine); });
-  FM.onTab("work", refreshTab);
+  FM.onTab("dashboard", function () {
+    return loadOpen().then(renderMine, function (e) { FM.panelError(FM.$("#mywork-panel"), "Open work", e); });
+  });
+  FM.onTab("work", function () {
+    return refreshTab().catch(function (e) { FM.panelError(FM.$("#work-panel"), "Tracked work", e); });
+  });
   FM.onPoll(function (tab) {
     if (tab !== "dashboard" && tab !== "work") return;
     if (document.querySelector(".modal-wrap")) return;
     if (tab === "work" && document.activeElement && document.activeElement.id === "w-q") return;
-    return loadOpen().then(rerender);
+    return loadOpen().then(rerender, function (e) {
+      FM.panelError(FM.$("#mywork-panel"), "Open work", e);
+    });
   });
 })();

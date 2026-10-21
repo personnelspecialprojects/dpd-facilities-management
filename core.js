@@ -1,7 +1,8 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.21-3";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.21-4";
 
 /*
- * Core: sign-in, SharePoint REST (with throttling retry), tabs, polling,
+ * Core: sign-in (popup, as in the Personnel Support portal), SharePoint REST
+ * (request digest, throttling retry, token refresh, paging), tabs, polling,
  * modals and toasts, audit writer with retry queue, version guard,
  * stale-tab detection, date and Excel helpers.
  */
@@ -211,7 +212,7 @@
 
   // ----------------------------------------------- banners and save blocking
   FM.setBlock = function (key, message, opts) {
-    FM.state.blocks[key] = { message: message, reload: !!(opts && opts.reload) };
+    FM.state.blocks[key] = { message: message, reload: !!(opts && opts.reload), signin: !!(opts && opts.signin) };
     renderBanners();
   };
   FM.clearBlock = function (key) { delete FM.state.blocks[key]; renderBanners(); };
@@ -228,7 +229,8 @@
     el.innerHTML = Object.keys(FM.state.blocks).map(function (k) {
       var b = FM.state.blocks[k];
       return '<div class="banner warn" data-banner="' + FM.esc(k) + '"><span>' + FM.esc(b.message) + "</span>" +
-        (b.reload ? '<button class="btn" onclick="location.reload()">Reload</button>' : "") + "</div>";
+        (b.reload ? '<button class="btn" onclick="location.reload()">Reload</button>' : "") +
+        (b.signin ? '<button class="btn" data-reauth>Sign in again</button>' : "") + "</div>";
     }).join("");
     document.body.classList.toggle("save-blocked", FM.saveBlocked());
   }
@@ -283,89 +285,156 @@
   };
 
   // ------------------------------------------------------------- sign-in
+  // Same pattern as the Personnel Support portal: popup sign-in from the
+  // button for the identity token (User.Read), then a separate SharePoint
+  // token for <origin>/AllSites.Write. On page load, only try silently.
   var pca = null, account = null;
-  function redirectUri() { return location.origin + location.pathname.replace(/index\.html$/, ""); }
+  function spScope() { return new URL(C.siteUrl).origin + "/AllSites.Write"; }
+  FM.spScope = spScope;
+  function authority() { return "https://login.microsoftonline.com/" + C.tenantId; }
 
-  async function initAuth() {
-    if (!window.msal) throw new Error("The sign-in library didn't load. Check your connection and reload.");
+  function getPca() {
+    if (pca) return pca;
+    if (typeof window.msal === "undefined") return null;
     pca = new window.msal.PublicClientApplication({
-      auth: { clientId: C.clientId, authority: C.authority, redirectUri: redirectUri() },
+      auth: { clientId: C.clientId, authority: authority(), redirectUri: C.redirectUri },
       cache: { cacheLocation: "sessionStorage" }
     });
-    if (typeof pca.initialize === "function") await pca.initialize();
-    var r = await pca.handleRedirectPromise();
-    account = (r && r.account) || pca.getAllAccounts()[0] || null;
-    if (account && pca.setActiveAccount) pca.setActiveAccount(account);
+    return pca;
+  }
+  // The second CDN (fallback) loads after the app scripts, so wait briefly for it.
+  async function waitForMsal() {
+    for (var i = 0; i < 40 && typeof window.msal === "undefined"; i++) await sleep(250);
+    return getPca();
+  }
+  function msalText(e) {
+    return ((e && e.errorCode) ? e.errorCode + ": " : "") + ((e && (e.errorMessage || e.message)) || String(e));
+  }
+  function clearStuckInteraction() {
+    try {
+      Object.keys(sessionStorage).forEach(function (k) { if (/interaction\.status/i.test(k)) sessionStorage.removeItem(k); });
+    } catch (x) { /* storage unavailable */ }
+  }
+  async function acquireSp(allowPopup, forceRefresh) {
+    var m = getPca();
+    try {
+      return (await m.acquireTokenSilent({ scopes: [spScope()], account: account, forceRefresh: !!forceRefresh })).accessToken;
+    } catch (e) {
+      if (!allowPopup) throw e;
+      return (await m.acquireTokenPopup({ scopes: [spScope()], account: account })).accessToken;
+    }
   }
 
-  FM.getToken = async function (scope) {
-    var req = { scopes: [scope], account: account };
+  // SharePoint token for every request (MSAL caches and refreshes it).
+  FM.getToken = async function (forceRefresh) {
     try {
-      return (await pca.acquireTokenSilent(req)).accessToken;
+      return await acquireSp(false, forceRefresh);
     } catch (e) {
-      var code = (e && (e.errorCode || e.name)) || "";
-      var interactive = (window.msal.InteractionRequiredAuthError && e instanceof window.msal.InteractionRequiredAuthError) ||
-        /interaction_required|login_required|consent_required|InteractionRequired/i.test(code);
-      if (interactive) {
-        await pca.acquireTokenRedirect(req);
-        return new Promise(function () {});
-      }
-      throw e;
+      FM.setBlock("session", "Your sign-in has expired. Click Sign in again to keep working.", { signin: true });
+      var err = new Error("Your sign-in has expired. Click Sign in again at the top of the page.");
+      err.status = 401;
+      throw err;
+    }
+  };
+  // From the "Sign in again" banner button (a user click, so a popup is allowed).
+  FM.reauth = async function () {
+    try {
+      // Straight to the popup: an await before it would let the browser block it.
+      await getPca().acquireTokenPopup({ scopes: [spScope()], account: account });
+      FM.clearBlock("session");
+      FM.toast("Signed in again.");
+    } catch (e) {
+      FM.toast("Sign-in didn't finish: " + msalText(e), { type: "error" });
     }
   };
 
-  // Shows the reason on screen instead of failing silently.
+  // Sign in button.
   FM.signIn = async function () {
     var btn = FM.$("#btn-signin");
     var msg = FM.$("#signin-error");
     if (msg) msg.textContent = "";
-    if (btn) { btn.disabled = true; btn.textContent = "Opening sign-in…"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Signing in…"; }
     try {
-      if (!pca) throw new Error("The sign-in library didn't start. Reload the page.");
+      var m = getPca();
+      if (!m) throw new Error("The sign-in library didn't load. Check your connection and reload the page.");
+      var login;
       try {
-        await pca.loginRedirect({ scopes: [C.graphScope] });
+        login = await m.loginPopup({ scopes: [C.loginScope] });
       } catch (e) {
-        // A sign-in that was started earlier and never finished blocks a new one. Clear it and try once more.
         if (e && e.errorCode === "interaction_in_progress") {
-          try {
-            Object.keys(sessionStorage).forEach(function (k) { if (/interaction\.status/i.test(k)) sessionStorage.removeItem(k); });
-          } catch (x) { /* storage unavailable */ }
-          await pca.loginRedirect({ scopes: [C.graphScope] });
+          clearStuckInteraction();
+          login = await m.loginPopup({ scopes: [C.loginScope] });
         } else throw e;
       }
+      account = login.account;
+      m.setActiveAccount(account);
+      try {
+        await acquireSp(true);
+      } catch (e) {
+        throw new Error("Signed in, but couldn't get access to SharePoint (" + msalText(e) + ").");
+      }
+      await startSession();
     } catch (e) {
       if (btn) { btn.disabled = false; btn.textContent = "Sign in"; }
-      var text = "Sign-in didn't start: " + ((e && (e.errorCode ? e.errorCode + " — " : "") + (e.errorMessage || e.message)) || String(e));
+      var text = /popup_window_error|empty_window_error/.test((e && e.errorCode) || "")
+        ? "The sign-in window was blocked. Allow pop-ups for this site, then click Sign in again."
+        : (e && e.errorCode === "user_cancelled")
+          ? "Sign-in was cancelled."
+          : "Sign-in didn't finish: " + msalText(e);
       if (msg) msg.textContent = text; else FM.toast(text, { type: "error" });
       if (window.console) console.error(e);
     }
   };
-  FM.signOut = function () {
+  FM.signOut = async function () {
     FM.data = { zones: [], taskTypes: [], settings: {} };
-    return pca.logoutRedirect({ account: account, postLogoutRedirectUri: redirectUri() });
+    FM.state.members = [];
+    var m = getPca();
+    try {
+      if (m && m.logoutPopup) { await m.logoutPopup({ account: account, mainWindowRedirectUri: C.redirectUri }); return; }
+    } catch (e) { /* fall through */ }
+    try { sessionStorage.clear(); } catch (e) { /* ignore */ }
+    location.reload();
   };
 
   // ---------------------------------------------------------- SharePoint
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   FM.sleep = sleep;
 
-  async function spFetch(url, opts, attempt) {
-    opts = opts || {}; attempt = attempt || 0;
-    var token = await FM.getToken(C.spScope);
-    var headers = Object.assign({ Authorization: "Bearer " + token, Accept: "application/json;odata=nometadata" }, opts.headers || {});
-    var res = await fetch(url, { method: opts.method || "GET", headers: headers, body: opts.body });
-    if ((res.status === 429 || res.status === 503) && attempt < 6) {
-      var ra = parseInt(res.headers.get("Retry-After"), 10);
-      await sleep(ra > 0 ? ra * 1000 : Math.min(30000, 1000 * Math.pow(2, attempt)));
-      return spFetch(url, opts, attempt + 1);
+  function readSpError(text) {
+    try {
+      var j = JSON.parse(text);
+      return (j["odata.error"] && j["odata.error"].message && j["odata.error"].message.value) ||
+        (j.error && j.error.message && (j.error.message.value || j.error.message)) || "";
+    } catch (e) { return String(text || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200); }
+  }
+
+  async function spFetch(url, opts) {
+    opts = opts || {};
+    var token = await FM.getToken();
+    var send = function () {
+      return fetch(url, {
+        method: opts.method || "GET",
+        headers: Object.assign({ Authorization: "Bearer " + token, Accept: "application/json;odata=nometadata" }, opts.headers || {}),
+        body: opts.body
+      });
+    };
+    var res = await send();
+    for (var a = 1; (res.status === 429 || res.status === 503) && a <= 8; a++) {
+      var asked = Number(res.headers.get("Retry-After"));
+      await sleep(Math.min(120, asked > 0 ? asked : Math.pow(2, a)) * 1000);
+      res = await send();
+    }
+    if (res.status === 401) {
+      // Expired token: refresh silently and retry once.
+      try { token = await FM.getToken(true); res = await send(); } catch (e) { /* reported below */ }
     }
     if (!res.ok) {
       var text = "";
       try { text = await res.text(); } catch (e) { /* ignore */ }
-      var msg = "";
-      try { var j = JSON.parse(text); msg = (j["odata.error"] && j["odata.error"].message && j["odata.error"].message.value) || (j.error && j.error.message && (j.error.message.value || j.error.message)) || ""; } catch (e) { /* not JSON */ }
+      var msg = readSpError(text);
       var err = new Error("SharePoint " + res.status + (msg ? ": " + msg : ""));
       err.status = res.status;
+      err.spMessage = msg;
       throw err;
     }
     if (res.status === 204) return null;
@@ -373,11 +442,46 @@
     return t ? JSON.parse(t) : null;
   }
 
+  // Writes need a form digest (cached until shortly before it expires).
+  var digest = null, digestExpires = 0;
+  async function getDigest(force) {
+    if (!force && digest && Date.now() < digestExpires) return digest;
+    var d = await spFetch(C.siteUrl + "/_api/contextinfo", { method: "POST" });
+    digest = d.FormDigestValue;
+    digestExpires = Date.now() + ((d.FormDigestTimeoutSeconds || 1800) - 120) * 1000;
+    return digest;
+  }
+  async function spWrite(url, method, body) {
+    var attempt = async function (force) {
+      var headers = { "X-RequestDigest": await getDigest(force), "Content-Type": "application/json;odata=nometadata" };
+      if (method === "MERGE") { headers["IF-MATCH"] = "*"; headers["X-HTTP-Method"] = "MERGE"; }
+      return spFetch(url, { method: "POST", headers: headers, body: JSON.stringify(body) });
+    };
+    try { return await attempt(false); }
+    catch (e) { if (e.status === 403) return attempt(true); throw e; }
+  }
+
+  // Adds the list name and a plain hint to SharePoint errors.
+  function explain(list, verb, e) {
+    if (e && !e.explained) {
+      var hint = "";
+      if (e.status === 400) hint = " A column in this list probably doesn't match what the app expects. Admin → SharePoint setup shows which.";
+      else if (e.status === 404) hint = " Check that the list exists on " + C.siteUrl + " with exactly this name.";
+      else if (e.status === 403) hint = " You don't have permission on this list.";
+      e.message = "Couldn't " + verb + " " + list + " (" + e.message + ")." + hint;
+      e.list = list;
+      e.explained = true;
+    }
+    return e;
+  }
+
   function qs(o) {
     return Object.keys(o).filter(function (k) { return o[k] != null && o[k] !== ""; })
       .map(function (k) { return k + "=" + encodeURIComponent(o[k]); }).join("&");
   }
-  function listUrl(list) { return C.siteUrl + "/_api/web/lists/GetByTitle('" + String(list).replace(/'/g, "''") + "')"; }
+  function listUrl(list) {
+    return C.siteUrl + "/_api/web/lists/getbytitle('" + encodeURIComponent(String(list).replace(/'/g, "''")) + "')";
+  }
   FM.odataStr = function (s) { return "'" + String(s).replace(/'/g, "''") + "'"; };
   FM.odataDate = function (d) { return "datetime'" + (d instanceof Date ? d : new Date(d)).toISOString() + "'"; };
 
@@ -385,34 +489,29 @@
     listUrl: listUrl,
     raw: function (url, opts) { return spFetch(url, opts); },
     getAll: async function (list, q) {
-      q = Object.assign({ $top: 5000 }, q || {});
+      q = Object.assign({ $top: 2000 }, q || {});
       var url = listUrl(list) + "/items?" + qs(q);
-      var out = [];
-      while (url) {
-        var data = await spFetch(url);
-        out = out.concat((data && data.value) || []);
-        url = data && (data["odata.nextLink"] || data["@odata.nextLink"]);
-      }
+      var out = [], pages = 0;
+      try {
+        while (url && pages++ < 200) {
+          var data = await spFetch(url);
+          out = out.concat((data && data.value) || []);
+          url = data && (data["odata.nextLink"] || data["@odata.nextLink"]);
+        }
+      } catch (e) { throw explain(list, "read", e); }
       return out;
     },
     get: function (list, id, select) {
-      return spFetch(listUrl(list) + "/items(" + Number(id) + ")" + (select ? "?" + qs({ $select: select }) : ""));
+      return spFetch(listUrl(list) + "/items(" + Number(id) + ")" + (select ? "?" + qs({ $select: select }) : ""))
+        .catch(function (e) { throw explain(list, "read", e); });
     },
     create: function (list, data, opts) {
       if (!(opts && opts.force)) FM.guardSave();
-      return spFetch(listUrl(list) + "/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json;odata=nometadata" },
-        body: JSON.stringify(data)
-      });
+      return spWrite(listUrl(list) + "/items", "POST", data).catch(function (e) { throw explain(list, "save to", e); });
     },
     update: function (list, id, data) {
       FM.guardSave();
-      return spFetch(listUrl(list) + "/items(" + Number(id) + ")", {
-        method: "POST",
-        headers: { "Content-Type": "application/json;odata=nometadata", "X-HTTP-Method": "MERGE", "IF-MATCH": "*" },
-        body: JSON.stringify(data)
-      });
+      return spWrite(listUrl(list) + "/items(" + Number(id) + ")", "MERGE", data).catch(function (e) { throw explain(list, "save to", e); });
     }
   };
 
@@ -464,21 +563,57 @@
   };
 
   // ------------------------------------------------------- reference data
+  // A list that can't be read is reported on screen instead of stopping the
+  // whole app, so an admin can still reach Admin -> SharePoint setup.
+  FM.state.loadErrors = {};
+  FM.reportLoadError = function (key, e) {
+    if (e) FM.state.loadErrors[key] = e.message || String(e);
+    else delete FM.state.loadErrors[key];
+    renderLoadErrors();
+  };
+  function renderLoadErrors() {
+    var el = FM.$("#load-errors"); if (!el) return;
+    var keys = Object.keys(FM.state.loadErrors);
+    el.hidden = !keys.length;
+    el.innerHTML = keys.length
+      ? '<div class="load-error"><b>Some SharePoint data couldn\'t be loaded.</b><ul>' +
+        keys.map(function (k) { return "<li>" + FM.esc(FM.state.loadErrors[k]) + "</li>"; }).join("") + "</ul>" +
+        (FM.state.isAdmin ? '<button class="btn" data-goto-setup>Check SharePoint setup</button>' : "<span class=\"small\">Let an admin know.</span>") + "</div>"
+      : "";
+  }
   FM.loadMembers = async function () {
     FM.state.members = await FM.sp.getAll(C.lists.members, { $select: "Id,Title,DisplayName,Role,Active" });
     return FM.state.members;
   };
+  async function readRef(key, select) {
+    try {
+      var rows = await FM.sp.getAll(C.lists[key], { $select: select });
+      FM.reportLoadError(key, null);
+      return rows;
+    } catch (e) {
+      FM.reportLoadError(key, e);
+      return null;
+    }
+  }
   FM.loadReference = async function () {
     var r = await Promise.all([
-      FM.sp.getAll(C.lists.zones, { $select: "Id,Title,Description,Watches,SortOrder,Active" }),
-      FM.sp.getAll(C.lists.taskTypes, { $select: "Id,Title,InputType,ChecklistSteps,SortOrder,Active" }),
-      FM.sp.getAll(C.lists.settings, { $select: "Id,Title,Value" })
+      readRef("zones", "Id,Title,Description,Watches,SortOrder,Active"),
+      readRef("taskTypes", "Id,Title,InputType,ChecklistSteps,SortOrder,Active"),
+      readRef("settings", "Id,Title,Value")
     ]);
-    FM.data.zones = r[0].sort(FM.bySort);
-    FM.data.taskTypes = r[1].sort(FM.bySort);
-    var s = {};
-    r[2].forEach(function (row) { s[row.Title] = { id: row.Id, value: row.Value }; });
-    FM.data.settings = s;
+    if (r[0]) FM.data.zones = r[0].sort(FM.bySort);
+    if (r[1]) FM.data.taskTypes = r[1].sort(FM.bySort);
+    if (r[2]) {
+      var s = {};
+      r[2].forEach(function (row) { s[row.Title] = { id: row.Id, value: row.Value }; });
+      FM.data.settings = s;
+    }
+  };
+  // Shows a load failure inside a dashboard panel instead of "Loading…".
+  FM.panelError = function (el, title, e) {
+    if (!el) return;
+    el.innerHTML = '<div class="panel-head"><h2>' + FM.esc(title) + '</h2></div><div class="load-error">' + FM.esc(e && e.message ? e.message : String(e)) +
+      (FM.state.isAdmin ? '<div style="margin-top:8px"><button class="btn" data-goto-setup>Check SharePoint setup</button></div>' : "") + "</div>";
   };
   FM.zoneById = function (id) { return FM.data.zones.find(function (z) { return z.Id === Number(id); }) || null; };
   FM.typeSteps = function (t) {
@@ -576,79 +711,101 @@
   };
 
   // ----------------------------------------------------------- boot
-  async function graphMe() {
-    var token = await FM.getToken(C.graphScope);
-    var r = await fetch("https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName", {
-      headers: { Authorization: "Bearer " + token }
+  // True inside the sign-in popup window while MSAL reads the response.
+  function isAuthPopup() {
+    try {
+      return !!window.opener && window.opener !== window && /(^|[#&?])(code|error)=/.test(location.hash + location.search);
+    } catch (e) { return false; }
+  }
+
+  function describeAccessError(e) {
+    var list = C.lists.members;
+    if (e.status === 404) return "The list \"" + list + "\" wasn't found on " + C.siteUrl + ". Check that it exists there with exactly that name.";
+    if (e.status === 401 || e.status === 403) return "SharePoint refused access to \"" + list + "\" (" + e.status + "). Make sure your account has at least Read permission on that list.";
+    if (e.status === 400) return "The list \"" + list + "\" doesn't have the columns the app expects (" + (e.spMessage || e.message) + "). It needs DisplayName, Role and Active, created with exactly those names.";
+    return e.message || String(e);
+  }
+
+  var started = false;
+  async function startSession() {
+    if (started) return;
+    FM.state.me = {
+      email: String(account.username || "").toLowerCase(),
+      graphName: account.name || ""
+    };
+    showScreen("loading", "Checking access…");
+    try {
+      await FM.loadMembers();
+    } catch (e) {
+      showScreen("denied", describeAccessError(e));
+      return;
+    }
+    var mine = FM.state.members.find(function (m) { return FM.sameUser(m.Title, FM.state.me.email) && FM.isActive(m); });
+    if (!mine) {
+      showScreen("denied", "You're signed in as " + FM.state.me.email + ", but you aren't on the Facilities Management team list (or you're marked inactive). Ask an admin to add you.");
+      return;
+    }
+    started = true;
+    FM.state.member = mine;
+    FM.state.isAdmin = mine.Role === "Admin";
+    FM.state.me.name = FM.memberName(mine) || FM.state.me.graphName;
+    FM.$("#user-name").textContent = FM.state.me.name + (FM.state.isAdmin ? " (Admin)" : "");
+    FM.$("#user-box").hidden = false;
+
+    showScreen("loading", "Loading…");
+    await FM.loadReference();
+    Object.keys(FM.modules).sort().forEach(function (k) {
+      var mod = FM.modules[k];
+      if (mod.init) { try { mod.init(); } catch (e) { FM.error(e, k + " failed to start"); } }
     });
-    if (!r.ok) throw new Error("Couldn't read your account details (Graph " + r.status + ").");
-    return r.json();
+    showScreen("app");
+    renderTabs();
+    renderLoadErrors();
+    FM.state.started = true;
+    FM.showTab("dashboard");
+
+    FM.flushAuditQueue().catch(function () {});
+    FM.audit("Session", "Signed in", "", "");
+    setInterval(function () { if (!document.hidden) FM.poll(); }, C.pollSeconds * 1000);
+    setInterval(FM.checkStale, C.staleCheckSeconds * 1000);
+    var lastFocusPoll = Date.now();
+    window.addEventListener("focus", function () {
+      if (Date.now() - lastStaleCheck > 30000) FM.checkStale();
+      if (FM.state.started && Date.now() - lastFocusPoll > 20000) { lastFocusPoll = Date.now(); FM.poll(); }
+    });
   }
 
   FM.boot = async function () {
+    if (isAuthPopup()) {
+      showScreen("loading", "Finishing sign-in…");
+      return;
+    }
     FM.$("#btn-signin").onclick = function () { FM.signIn(); };
     FM.$("#btn-signout").onclick = function () { FM.signOut(); };
+    document.addEventListener("click", function (e) {
+      if (e.target.closest("[data-goto-setup]") && FM.state.isAdmin) {
+        FM.showTab("admin");
+        if (FM.modules.admin && FM.modules.admin.openSetup) FM.modules.admin.openSetup();
+      }
+      if (e.target.closest("[data-reauth]")) FM.reauth();
+    });
     FM.checkVersions();
-    if (/^PASTE_/.test(String(C.clientId)) || /^PASTE_/.test(String(C.authority))) {
-      showScreen("error", "config.js still has the placeholder sign-in values. In GitHub, edit config.js and replace clientId and authority with the values from the Personnel Support portal's config.js, then reload.");
+    var GUID = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
+    if (!GUID.test(String(C.clientId)) || !GUID.test(String(C.tenantId))) {
+      showScreen("error", "config.js is missing the clientId or tenantId (each is a 36-character ID). Copy them from the Personnel Support portal's config.js, then reload.");
       return;
     }
-    showScreen("loading", "Signing in…");
+    showScreen("loading", "Starting…");
+    var m = await waitForMsal();
+    if (!m) { showScreen("error", "The sign-in library didn't load. Check your connection and reload the page."); return; }
     try {
-      await initAuth();
-    } catch (e) {
-      showScreen("error", e.message);
-      return;
-    }
-    if (!account) { showScreen("signin"); return; }
-
-    try {
-      var me = await graphMe();
-      FM.state.me = {
-        email: String(me.mail || me.userPrincipalName || account.username || "").toLowerCase(),
-        graphName: me.displayName || ""
-      };
-      showScreen("loading", "Checking access…");
-      try {
-        await FM.loadMembers();
-      } catch (e) {
-        if (e.status === 401 || e.status === 403 || e.status === 404) {
-          showScreen("denied", "You don't have access to this app's data. Ask a Facilities Management admin to add you.");
-          return;
-        }
-        throw e;
-      }
-      var mine = FM.state.members.find(function (m) { return FM.sameUser(m.Title, FM.state.me.email) && FM.isActive(m); });
-      if (!mine) {
-        showScreen("denied", "You're signed in as " + FM.state.me.email + ", but you aren't on the Facilities Management team list. Ask an admin to add you.");
-        return;
-      }
-      FM.state.member = mine;
-      FM.state.isAdmin = mine.Role === "Admin";
-      FM.state.me.name = FM.memberName(mine) || FM.state.me.graphName;
-      FM.$("#user-name").textContent = FM.state.me.name + (FM.state.isAdmin ? " (Admin)" : "");
-      FM.$("#user-box").hidden = false;
-
-      showScreen("loading", "Loading…");
-      await FM.loadReference();
-      Object.keys(FM.modules).sort().forEach(function (k) {
-        var mod = FM.modules[k];
-        if (mod.init) { try { mod.init(); } catch (e) { FM.error(e, k + " failed to start"); } }
-      });
-      showScreen("app");
-      renderTabs();
-      FM.state.started = true;
-      FM.showTab("dashboard");
-
-      FM.flushAuditQueue().catch(function () {});
-      FM.audit("Session", "Signed in", "", "");
-      setInterval(function () { if (!document.hidden) FM.poll(); }, C.pollSeconds * 1000);
-      setInterval(FM.checkStale, C.staleCheckSeconds * 1000);
-      var lastFocusPoll = Date.now();
-      window.addEventListener("focus", function () {
-        if (Date.now() - lastStaleCheck > 30000) FM.checkStale();
-        if (FM.state.started && Date.now() - lastFocusPoll > 20000) { lastFocusPoll = Date.now(); FM.poll(); }
-      });
+      if (typeof m.initialize === "function") await m.initialize();
+      var accounts = m.getAllAccounts();
+      if (!accounts.length) { showScreen("signin"); return; }
+      account = (m.getActiveAccount && m.getActiveAccount()) || accounts[0];
+      m.setActiveAccount(account);
+      try { await acquireSp(false); } catch (e) { showScreen("signin"); return; }
+      await startSession();
     } catch (e) {
       showScreen("error", e.message || String(e));
     }
