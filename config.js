@@ -12,8 +12,8 @@ window.FM_CONFIG = {
 
   // Copy these two values from the Personnel Support portal's config.js
   // (same Azure AD app registration).
-  clientId: "PASTE_CLIENT_ID_FROM_PERSONNEL_SUPPORT_CONFIG",
-  authority: "PASTE_AUTHORITY_FROM_PERSONNEL_SUPPORT_CONFIG",
+  clientId: "0d384d2a-9a9e-46f6-a195-ad63f9e94f06",          // PatrolBidPortal registration
+  tenantId: "2935709e-c10c-4809-a302-852d369f8700",
 
   siteUrl: "https://dallastxgov.sharepoint.com/sites/PatrolBid",
   spScope: "https://dallastxgov.sharepoint.com/AllSites.Write",
