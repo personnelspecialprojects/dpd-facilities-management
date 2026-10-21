@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.21-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.21-3";
 
 /*
  * Core: sign-in, SharePoint REST (with throttling retry), tabs, polling,
@@ -314,7 +314,32 @@
     }
   };
 
-  FM.signIn = function () { return pca.loginRedirect({ scopes: [C.graphScope] }); };
+  // Shows the reason on screen instead of failing silently.
+  FM.signIn = async function () {
+    var btn = FM.$("#btn-signin");
+    var msg = FM.$("#signin-error");
+    if (msg) msg.textContent = "";
+    if (btn) { btn.disabled = true; btn.textContent = "Opening sign-in…"; }
+    try {
+      if (!pca) throw new Error("The sign-in library didn't start. Reload the page.");
+      try {
+        await pca.loginRedirect({ scopes: [C.graphScope] });
+      } catch (e) {
+        // A sign-in that was started earlier and never finished blocks a new one. Clear it and try once more.
+        if (e && e.errorCode === "interaction_in_progress") {
+          try {
+            Object.keys(sessionStorage).forEach(function (k) { if (/interaction\.status/i.test(k)) sessionStorage.removeItem(k); });
+          } catch (x) { /* storage unavailable */ }
+          await pca.loginRedirect({ scopes: [C.graphScope] });
+        } else throw e;
+      }
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = "Sign in"; }
+      var text = "Sign-in didn't start: " + ((e && (e.errorCode ? e.errorCode + " — " : "") + (e.errorMessage || e.message)) || String(e));
+      if (msg) msg.textContent = text; else FM.toast(text, { type: "error" });
+      if (window.console) console.error(e);
+    }
+  };
   FM.signOut = function () {
     FM.data = { zones: [], taskTypes: [], settings: {} };
     return pca.logoutRedirect({ account: account, postLogoutRedirectUri: redirectUri() });
@@ -564,6 +589,10 @@
     FM.$("#btn-signin").onclick = function () { FM.signIn(); };
     FM.$("#btn-signout").onclick = function () { FM.signOut(); };
     FM.checkVersions();
+    if (/^PASTE_/.test(String(C.clientId)) || /^PASTE_/.test(String(C.authority))) {
+      showScreen("error", "config.js still has the placeholder sign-in values. In GitHub, edit config.js and replace clientId and authority with the values from the Personnel Support portal's config.js, then reload.");
+      return;
+    }
     showScreen("loading", "Signing in…");
     try {
       await initAuth();

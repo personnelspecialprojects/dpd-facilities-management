@@ -7,14 +7,14 @@
 <title>DPD Facilities Management</title>
 <script>
   // Release manifest. Update this and the ?v= values below with every release.
-  window.FM_PAGE_VERSION = "2026.10.21-2";
+  window.FM_PAGE_VERSION = "2026.10.21-3";
   window.FM_EXPECTED_VERSIONS = {
     "activity.js": "2026.10.21-1",
     "admin.js": "2026.10.21-1",
     "audit.js": "2026.10.21-1",
     "checks.js": "2026.10.21-2",
     "config.js": "2026.10.21-2",
-    "core.js": "2026.10.21-1",
+    "core.js": "2026.10.21-3",
     "reports.js": "2026.10.21-2",
     "setup-check.js": "2026.10.21-1",
     "styles.css": "2026.10.21-2",
@@ -44,6 +44,7 @@
       <h1>DPD Facilities Management</h1>
       <p>Sign in with your city account to continue.</p>
       <button class="btn primary big" id="btn-signin">Sign in</button>
+      <p id="signin-error" class="small" style="color:#a32020;margin-top:12px" role="alert"></p>
     </div>
   </section>
   <section class="screen" id="screen-denied" hidden><div class="screen-card"><h1>No access</h1><p class="screen-msg"></p></div></section>
@@ -70,7 +71,7 @@
 
 <script src="https://alcdn.msauth.net/browser/2.35.0/js/msal-browser.min.js"></script>
 <script src="config.js?v=2026.10.21-2"></script>
-<script src="core.js?v=2026.10.21-1"></script>
+<script src="core.js?v=2026.10.21-3"></script>
 <script src="activity.js?v=2026.10.21-1"></script>
 <script src="admin.js?v=2026.10.21-1"></script>
 <script src="audit.js?v=2026.10.21-1"></script>
