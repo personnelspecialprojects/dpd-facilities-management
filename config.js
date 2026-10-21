@@ -14,7 +14,8 @@ window.FM_CONFIG = {
   // (same Azure AD app registration).
   clientId: "0d384d2a-9a9e-46f6-a195-ad63f9e94f06",          // PatrolBidPortal registration
   tenantId: "2935709e-c10c-4809-a302-852d369f8700",
-
+  authority: "https://login.microsoftonline.com/2935709e-c10c-4809-a302-852d369f8700",
+  
   siteUrl: "https://dallastxgov.sharepoint.com/sites/PatrolBid",
   spScope: "https://dallastxgov.sharepoint.com/AllSites.Write",
   graphScope: "User.Read",
