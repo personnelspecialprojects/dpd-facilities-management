@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["work.js"] = "2026.10.21-4";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["work.js"] = "2026.10.23-1";
 
 /*
  * Tracked work: multi-step items (work orders and the like) with
@@ -65,7 +65,7 @@
         var p = progress(i);
         return '<li data-item="' + i.Id + '"><div class="wl-top"><span>' + FM.esc(i.Title) + "</span>" +
           (p.total ? '<span class="small muted">' + p.done + "/" + p.total + "</span>" : "") + "</div>" +
-          '<div class="wl-sub">' + FM.esc(i.TaskTypeName || "") + (i.Reference ? " · #" + FM.esc(i.Reference) : "") +
+          '<div class="wl-sub">' + FM.esc(i.TaskTypeName || "") + (i.Reference ? " · " + FM.esc(FM.refText(FM.typeById(i.TaskTypeId), i.Reference)) : "") +
           " · " + FM.esc(assignedLabel(i)) +
           (i.DueDate ? ' · <span class="' + (isOverdue(i) ? "overdue" : "") + '">due ' + FM.esc(FM.fmtDate(i.DueDate)) + "</span>" : "") +
           "</div></li>";
@@ -148,7 +148,7 @@
     if (!t) return;
     var body =
       '<label class="field"><span>Title</span><input type="text" id="n-title" value="' + FM.esc(t.Title) + '"></label>' +
-      '<div class="field-row"><label class="field"><span>Reference # (work order, etc.)</span><input type="text" id="n-ref"></label>' +
+      '<div class="field-row"><label class="field"><span>' + FM.esc(t.InputLabel && String(t.InputLabel).trim() ? FM.inputLabel(t) + " (optional)" : "Reference # (work order, etc.)") + '</span><input type="text" id="n-ref"></label>' +
       '<label class="field"><span>Due date (optional)</span><input type="date" id="n-due"></label></div>' +
       '<label class="field"><span>Assign to</span><select id="n-assign">' + FM.memberOptions(me().email, { blank: "Unassigned" }) + "</select></label>" +
       '<label class="field"><span>Description</span><textarea id="n-desc" rows="3"></textarea></label>' +
@@ -163,7 +163,7 @@
           var ref = m.body.querySelector("#n-ref").value.trim();
           if (ref) {
             var dup = S.open.find(function (i) { return String(i.Reference || "").toLowerCase() === ref.toLowerCase(); });
-            if (dup && !(await FM.confirm("Open item \"" + dup.Title + "\" already has reference " + ref + ". Create another?", "Create anyway"))) return false;
+            if (dup && !(await FM.confirm("Open item \"" + dup.Title + "\" already has " + FM.inputLabel(t) + " " + ref + ". Create another?", "Create anyway"))) return false;
           }
           var assign = m.body.querySelector("#n-assign").value;
           var due = m.body.querySelector("#n-due").value;
@@ -182,7 +182,7 @@
             OpenedByName: me().name
           };
           var created = Object.assign({}, row, (await FM.sp.create(L.work, row)) || {});
-          await addLog(created.Id, "Created", (ref ? "Reference " + ref + ". " : "") + (assign ? "Assigned to " + row.AssignedToName + "." : "Unassigned."));
+          await addLog(created.Id, "Created", (ref ? FM.inputLabel(t) + " " + ref + ". " : "") + (assign ? "Assigned to " + row.AssignedToName + "." : "Unassigned."));
           FM.audit("Work", "Work item created", created.Id, t.Title + " · " + title + (ref ? " · ref " + ref : ""));
           upsertLocal(created);
           rerender();
@@ -223,7 +223,7 @@
     var html = '<dl class="kv">' +
       "<dt>Status</dt><dd>" + statusPill(item.Status) + (item.ClosedAt ? ' <span class="small muted">' + FM.esc(FM.fmtDateTime(item.ClosedAt)) + "</span>" : "") + "</dd>" +
       "<dt>Type</dt><dd>" + FM.esc(item.TaskTypeName || "") + "</dd>" +
-      "<dt>Reference</dt><dd>" + FM.esc(item.Reference || "—") + "</dd>" +
+      "<dt>" + FM.esc(FM.inputLabel(FM.typeById(item.TaskTypeId))) + "</dt><dd>" + FM.esc(item.Reference || "—") + "</dd>" +
       "<dt>Assigned to</dt><dd>" + FM.esc(assignedLabel(item)) + "</dd>" +
       "<dt>Due</dt><dd" + (isOverdue(item) ? ' class="overdue"' : "") + ">" + FM.esc(FM.fmtDate(item.DueDate) || "—") + "</dd>" +
       "<dt>Opened</dt><dd>" + FM.esc(FM.fmtDateTime(item.OpenedAt || item.Created)) + (item.OpenedByName ? " by " + FM.esc(item.OpenedByName) : "") + "</dd>" +
@@ -336,7 +336,7 @@
       title: "Edit details",
       body:
         '<label class="field"><span>Title</span><input type="text" id="e-title" value="' + FM.esc(item.Title) + '"></label>' +
-        '<div class="field-row"><label class="field"><span>Reference #</span><input type="text" id="e-ref" value="' + FM.esc(item.Reference || "") + '"></label>' +
+        '<div class="field-row"><label class="field"><span>' + FM.esc(FM.inputLabel(FM.typeById(item.TaskTypeId))) + '</span><input type="text" id="e-ref" value="' + FM.esc(item.Reference || "") + '"></label>' +
         '<label class="field"><span>Due date</span><input type="date" id="e-due" value="' + FM.esc(FM.isoToYmd(item.DueDate)) + '"></label></div>' +
         '<label class="field"><span>Description</span><textarea id="e-desc" rows="3">' + FM.esc(item.Description || "") + "</textarea></label>",
       actions: [{ label: "Cancel" }, {
