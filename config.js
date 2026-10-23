@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.21-4";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.23-1";
 
 /*
  * DPD Facilities Management: environment values, list names and column specs.
@@ -95,6 +95,7 @@ window.FM_CONFIG = {
       columns: [
         { name: "Title", type: "Text", note: "task name" },
         { name: "InputType", type: "Choice", choices: ["Click Only", "Reference", "Count"] },
+        { name: "InputLabel", type: "Text" },
         { name: "ChecklistSteps", type: "Note" },
         { name: "SortOrder", type: "Number" },
         { name: "Active", type: "Boolean" }
