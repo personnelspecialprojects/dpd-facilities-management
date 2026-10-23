@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.21-4";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.23-1";
 
 /*
  * Core: sign-in (popup, as in the Personnel Support portal), SharePoint REST
@@ -595,10 +595,27 @@
       return null;
     }
   }
+  // Task types: if the InputLabel column hasn't been added yet, read without
+  // it (default labels are used) instead of failing the whole list.
+  FM.state.hasInputLabel = true;
+  async function readTaskTypes() {
+    var base = "Id,Title,InputType,ChecklistSteps,SortOrder,Active";
+    try {
+      var rows = await FM.sp.getAll(C.lists.taskTypes, { $select: base + ",InputLabel" });
+      FM.state.hasInputLabel = true;
+      FM.reportLoadError("taskTypes", null);
+      return rows;
+    } catch (e) {
+      if (e.status !== 400) { FM.reportLoadError("taskTypes", e); return null; }
+      var rows2 = await readRef("taskTypes", base);
+      if (rows2) FM.state.hasInputLabel = false;
+      return rows2;
+    }
+  }
   FM.loadReference = async function () {
     var r = await Promise.all([
       readRef("zones", "Id,Title,Description,Watches,SortOrder,Active"),
-      readRef("taskTypes", "Id,Title,InputType,ChecklistSteps,SortOrder,Active"),
+      readTaskTypes(),
       readRef("settings", "Id,Title,Value")
     ]);
     if (r[0]) FM.data.zones = r[0].sort(FM.bySort);
@@ -614,6 +631,20 @@
     if (!el) return;
     el.innerHTML = '<div class="panel-head"><h2>' + FM.esc(title) + '</h2></div><div class="load-error">' + FM.esc(e && e.message ? e.message : String(e)) +
       (FM.state.isAdmin ? '<div style="margin-top:8px"><button class="btn" data-goto-setup>Check SharePoint setup</button></div>' : "") + "</div>";
+  };
+  // The label for a task type's entry box (the gray hint text), e.g. "Employee #".
+  FM.inputLabel = function (t) {
+    var custom = t && t.InputLabel ? String(t.InputLabel).trim() : "";
+    if (custom) return custom;
+    if (t && t.InputType === "Count" && !FM.typeSteps(t).length) return "Count";
+    return "Reference #";
+  };
+  FM.typeById = function (id) { return FM.data.taskTypes.find(function (t) { return t.Id === Number(id); }) || null; };
+  // "Employee # 12345" for display; the default label shows as "#12345".
+  FM.refText = function (t, value) {
+    if (!value) return "";
+    var custom = t && t.InputLabel ? String(t.InputLabel).trim() : "";
+    return custom ? custom + " " + value : "#" + value;
   };
   FM.zoneById = function (id) { return FM.data.zones.find(function (z) { return z.Id === Number(id); }) || null; };
   FM.typeSteps = function (t) {
