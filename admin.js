@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["admin.js"] = "2026.10.21-4";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["admin.js"] = "2026.10.23-1";
 
 /*
  * Admin tab: zones, task types, team access, settings, setup check.
@@ -103,7 +103,8 @@
       types.map(function (t) {
         var st = FM.typeSteps(t);
         return '<tr class="' + (FM.isActive(t) ? "" : "dim") + '"><td class="num">' + FM.esc(t.SortOrder == null ? "" : t.SortOrder) + "</td><td><b>" + FM.esc(t.Title) + "</b></td><td>" +
-          (st.length ? '<span class="pill blue">Tracked work</span>' : '<span class="pill">One-click</span>') + "</td><td>" + (st.length ? "" : FM.esc(t.InputType || "Click Only")) + "</td><td>" +
+          (st.length ? '<span class="pill blue">Tracked work</span>' : '<span class="pill">One-click</span>') + "</td><td>" +
+          (st.length ? FM.esc(FM.inputLabel(t)) : FM.esc(t.InputType || "Click Only") + ((t.InputType === "Reference" || t.InputType === "Count") ? ' <span class="muted">(' + FM.esc(FM.inputLabel(t)) + ")</span>" : "")) + "</td><td>" +
           FM.esc(st.join(" → ")) + "</td><td>" + yesNo(t.Active) + '</td><td><button class="btn" data-a="type-edit" data-id="' + t.Id + '" data-save>Edit</button></td></tr>';
       }).join("") + "</tbody></table></div>";
   }
@@ -118,9 +119,11 @@
       '<div class="field-row"><label class="field"><span>One-click input</span><select id="t-input">' +
       ["Click Only", "Reference", "Count"].map(function (v) { return "<option" + ((t ? t.InputType || "Click Only" : "Click Only") === v ? " selected" : "") + ">" + v + "</option>"; }).join("") +
       '</select></label><label class="field"><span>Order</span><input type="number" id="t-sort" value="' + (t ? (t.SortOrder == null ? "" : t.SortOrder) : maxSort + 10) + '"></label></div>' +
-      '<label class="field"><span>Status</span><select id="t-active"><option value="1">Active</option><option value="0"' + (t && t.Active === false ? " selected" : "") + ">Retired</option></select></label>" +
-      '<p class="small muted">Tracked work items always have an optional reference # (work order number).</p>';
-    FM.modal({
+      '<label class="field"><span>Entry box label (the gray hint text)</span><input type="text" id="t-label" maxlength="40" value="' + FM.esc(t && t.InputLabel ? t.InputLabel : "") + '"' +
+      (FM.state.hasInputLabel ? "" : " disabled") + '></label>' +
+      '<p class="small muted" id="t-label-help"></p>' +
+      '<label class="field"><span>Status</span><select id="t-active"><option value="1">Active</option><option value="0"' + (t && t.Active === false ? " selected" : "") + ">Retired</option></select></label>";
+    var tm = FM.modal({
       title: t ? "Edit task type" : "Add task type",
       body: body,
       actions: [{ label: "Cancel" }, {
@@ -134,6 +137,8 @@
             SortOrder: b.querySelector("#t-sort").value === "" ? null : Number(b.querySelector("#t-sort").value),
             Active: b.querySelector("#t-active").value === "1"
           };
+          var label = b.querySelector("#t-label").value.trim();
+          if (FM.state.hasInputLabel) next.InputLabel = label;
           if (!next.Title) { FM.toast("Enter a task name.", { type: "error" }); return false; }
           var clash = FM.data.taskTypes.find(function (x) { return x.Title.trim().toLowerCase() === next.Title.toLowerCase() && (!t || x.Id !== t.Id); });
           if (clash) { FM.toast("Another task type already has that name.", { type: "error" }); return false; }
@@ -142,6 +147,7 @@
             if (next.Title !== t.Title) ch.push("name: " + t.Title + " → " + next.Title);
             if (JSON.stringify(steps) !== JSON.stringify(FM.typeSteps(t))) ch.push("steps: " + (FM.typeSteps(t).join(" / ") || "none") + " → " + (steps.join(" / ") || "none"));
             if (next.InputType !== (t.InputType || "Click Only")) ch.push("input: " + (t.InputType || "Click Only") + " → " + next.InputType);
+            if (FM.state.hasInputLabel && label !== String(t.InputLabel || "").trim()) ch.push("label: " + (t.InputLabel || "default") + " → " + (label || "default"));
             if (next.SortOrder !== (t.SortOrder == null ? null : t.SortOrder)) ch.push("order " + t.SortOrder + " → " + next.SortOrder);
             if (next.Active !== FM.isActive(t)) ch.push(next.Active ? "restored" : "retired");
             if (!ch.length) return;
@@ -149,7 +155,7 @@
             FM.audit("Admin", "Task type updated", t.Id, t.Title + " · " + ch.join("; "));
           } else {
             var created = await FM.sp.create(L.taskTypes, next);
-            FM.audit("Admin", "Task type added", created.Id, next.Title + (steps.length ? " · steps: " + steps.join(" / ") : " · " + next.InputType));
+            FM.audit("Admin", "Task type added", created.Id, next.Title + (steps.length ? " · steps: " + steps.join(" / ") : " · " + next.InputType) + (label ? " · label: " + label : ""));
           }
           await reloadRef();
           render();
@@ -157,6 +163,27 @@
         }
       }]
     });
+    // Keep the label help (and its default) in step with the input type and steps.
+    var tb = tm.body;
+    function syncLabel() {
+      var hasSteps = tb.querySelector("#t-steps").value.trim() !== "";
+      var type = tb.querySelector("#t-input").value;
+      var box = tb.querySelector("#t-label"), help = tb.querySelector("#t-label-help");
+      var applies = hasSteps || type === "Reference" || type === "Count";
+      var def = !hasSteps && type === "Count" ? "Count" : "Reference #";
+      box.placeholder = applies ? def : "";
+      if (FM.state.hasInputLabel) box.disabled = !applies;
+      help.textContent = !FM.state.hasInputLabel
+        ? "To use labels, add a Single line of text column named InputLabel to FM Task Types, then reload."
+        : !applies
+          ? "Click Only tasks have no entry box, so there's no label."
+          : hasSteps
+            ? "Labels the reference field on this tracked work, e.g. Work order #. Leave empty for \"" + def + "\"."
+            : "Shown in the entry box on the Dashboard, e.g. Employee # or Badge #. Leave empty for \"" + def + "\".";
+    }
+    tb.querySelector("#t-steps").addEventListener("input", syncLabel);
+    tb.querySelector("#t-input").addEventListener("change", syncLabel);
+    syncLabel();
   }
 
   // --------------------------------------------------------------- team
