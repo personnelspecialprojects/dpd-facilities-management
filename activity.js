@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["activity.js"] = "2026.10.21-4";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["activity.js"] = "2026.10.23-1";
 
 /*
  * Task logging (Dashboard, right side). Task types are set up in Admin.
@@ -42,9 +42,9 @@
     if (quick.length) {
       html += '<div class="task-list">';
       quick.forEach(function (t) {
-        var input = "";
-        if (t.InputType === "Reference") input = '<input type="text" name="ref" placeholder="Reference #" aria-label="Reference number for ' + FM.esc(t.Title) + '">';
-        else if (t.InputType === "Count") input = '<input type="number" name="qty" min="1" step="1" placeholder="Count" aria-label="Count for ' + FM.esc(t.Title) + '">';
+        var input = "", lbl = FM.inputLabel(t);
+        if (t.InputType === "Reference") input = '<input type="text" name="ref" placeholder="' + FM.esc(lbl) + '" title="' + FM.esc(lbl) + '" aria-label="' + FM.esc(lbl + " for " + t.Title) + '">';
+        else if (t.InputType === "Count") input = '<input type="number" name="qty" min="1" step="1" placeholder="' + FM.esc(lbl) + '" title="' + FM.esc(lbl) + '" aria-label="' + FM.esc(lbl + " for " + t.Title) + '">';
         else input = "<span></span>";
         html += '<form class="task-row" data-type="' + t.Id + '"><span class="task-name">' + FM.esc(t.Title) + "</span>" + input +
           '<button class="btn primary" type="submit" data-save>Log</button></form>';
@@ -63,7 +63,7 @@
     else {
       html += '<ul class="recent">' + mine.map(function (r) {
         return '<li class="' + (r.Voided ? "voided" : "") + '"><span>' + FM.esc(r.TaskTypeName) +
-          (r.Reference ? " · " + FM.esc(r.Reference) : "") + (r.Quantity > 1 ? " × " + r.Quantity : "") +
+          (r.Reference ? " · " + FM.esc(FM.refText(FM.typeById(r.TaskTypeId), r.Reference)) : "") + (r.Quantity > 1 ? " × " + r.Quantity : "") +
           ' <span class="muted">' + FM.esc(FM.fmtTime(r.LoggedAt)) + "</span></span>" +
           (r.Voided ? '<span class="pill">Undone</span>' : '<button class="btn link" data-undo="' + r.Id + '" data-save>Undo</button>') + "</li>";
       }).join("") + "</ul>";
@@ -79,15 +79,15 @@
     var ref = "", qty = 1;
     if (t.InputType === "Reference") {
       ref = form.querySelector("[name=ref]").value.trim();
-      if (!ref) { FM.toast("Enter the reference number first.", { type: "error" }); return; }
+      if (!ref) { FM.toast("Enter the " + FM.inputLabel(t) + " first.", { type: "error" }); return; }
     } else if (t.InputType === "Count") {
       qty = Number(form.querySelector("[name=qty]").value);
-      if (!(qty >= 1) || Math.floor(qty) !== qty) { FM.toast("Enter a whole number of 1 or more.", { type: "error" }); return; }
+      if (!(qty >= 1) || Math.floor(qty) !== qty) { FM.toast(FM.inputLabel(t) + ": enter a whole number of 1 or more.", { type: "error" }); return; }
     }
     var now = new Date();
     if (ref) {
       var dupRef = S.rows.find(function (r) { return r.TaskTypeId === t.Id && !r.Voided && String(r.Reference || "").trim().toLowerCase() === ref.toLowerCase(); });
-      if (dupRef && !(await FM.confirm(ref + " was already logged today by " + (dupRef.StaffName || FM.nameForEmail(dupRef.StaffEmail)) + " at " + FM.fmtTime(dupRef.LoggedAt) + ". Log it again?", "Log again"))) return;
+      if (dupRef && !(await FM.confirm(FM.refText(t, ref) + " was already logged today by " + (dupRef.StaffName || FM.nameForEmail(dupRef.StaffEmail)) + " at " + FM.fmtTime(dupRef.LoggedAt) + ". Log it again?", "Log again"))) return;
     } else {
       var dupClick = S.rows.find(function (r) { return r.TaskTypeId === t.Id && !r.Voided && FM.sameUser(r.StaffEmail, me().email) && now - new Date(r.LoggedAt) < 60000; });
       if (dupClick && !(await FM.confirm("You logged " + t.Title + " less than a minute ago. Log another?", "Log again"))) return;
@@ -108,7 +108,7 @@
       };
       var created = Object.assign({}, row, (await FM.sp.create(L.activity, row)) || {});
       S.rows.push(created);
-      FM.audit("Tasks", "Task logged", created.Id, t.Title + (ref ? " · ref " + ref : "") + (qty > 1 ? " · count " + qty : ""));
+      FM.audit("Tasks", "Task logged", created.Id, t.Title + (ref ? " · " + FM.inputLabel(t) + " " + ref : "") + (qty > 1 ? " · count " + qty : ""));
       render();
       FM.toast(t.Title + " logged.");
       var again = FM.$('form[data-type="' + t.Id + '"] input', panel());
