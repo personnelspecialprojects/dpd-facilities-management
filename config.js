@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.30-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.30-2";
 
 /*
  * DPD Facilities Management: environment values, list names and column specs.
@@ -20,7 +20,7 @@ window.FM_CONFIG = {
   // entry that matches the address it was opened from.
   redirectUris: [
     "https://personnelspecialprojects.github.io/dpd-facilities-management/",
-    "https://dpd-facilities-management.pages.dev/"
+    "https://dpd-facilities-management.dpd-apps.workers.dev/"
   ],
 
   // The SharePoint site itself: no trailing slash, no /SitePages/... part.
