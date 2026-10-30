@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.23-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["config.js"] = "2026.10.30-1";
 
 /*
  * DPD Facilities Management: environment values, list names and column specs.
@@ -14,8 +14,14 @@ window.FM_CONFIG = {
   // (PatrolBidPortal). These IDs aren't secrets.
   clientId: "0d384d2a-9a9e-46f6-a195-ad63f9e94f06",
   tenantId: "2935709e-c10c-4809-a302-852d369f8700",
-  // Must match the SPA redirect URI registered in Azure exactly (trailing slash).
-  redirectUri: "https://personnelspecialprojects.github.io/dpd-facilities-management/",
+  // Every address the app is published at. Each one must also be added in
+  // Azure (PatrolBidPortal -> Authentication -> Single-page application),
+  // spelled exactly the same, with the trailing slash. The app uses the
+  // entry that matches the address it was opened from.
+  redirectUris: [
+    "https://personnelspecialprojects.github.io/dpd-facilities-management/",
+    "https://dpd-facilities-management.pages.dev/"
+  ],
 
   // The SharePoint site itself: no trailing slash, no /SitePages/... part.
   siteUrl: "https://dallastxgov.sharepoint.com/sites/PatrolBid",
