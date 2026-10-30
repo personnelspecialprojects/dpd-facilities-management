@@ -1,4 +1,4 @@
-(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.23-1";
+(window.FM_FILE_VERSIONS = window.FM_FILE_VERSIONS || {})["core.js"] = "2026.10.30-1";
 
 /*
  * Core: sign-in (popup, as in the Personnel Support portal), SharePoint REST
@@ -269,7 +269,7 @@
   FM.checkStale = function () {
     if (!/^https?:/.test(location.protocol)) return Promise.resolve(false);
     lastStaleCheck = Date.now();
-    var url = new URL("index.html", location.href).toString() + "?_=" + Date.now();
+    var url = new URL("./", location.href).toString() + "?_=" + Date.now();
     return fetch(url, { cache: "no-store" })
       .then(function (r) { return r.ok ? r.text() : null; })
       .then(function (html) {
@@ -289,6 +289,16 @@
   // button for the identity token (User.Read), then a separate SharePoint
   // token for <origin>/AllSites.Write. On page load, only try silently.
   var pca = null, account = null;
+  // The registered address this copy of the app was opened from (no file
+  // name, no query), or null if it isn't in config.redirectUris.
+  function currentBase() { return (location.origin + location.pathname.replace(/[^/]*$/, "")).toLowerCase(); }
+  function redirectUri() {
+    var here = currentBase();
+    var list = C.redirectUris || (C.redirectUri ? [C.redirectUri] : []);
+    for (var i = 0; i < list.length; i++) if (String(list[i]).toLowerCase() === here) return list[i];
+    return null;
+  }
+  FM.redirectUri = redirectUri;
   function spScope() { return new URL(C.siteUrl).origin + "/AllSites.Write"; }
   FM.spScope = spScope;
   function authority() { return "https://login.microsoftonline.com/" + C.tenantId; }
@@ -297,7 +307,7 @@
     if (pca) return pca;
     if (typeof window.msal === "undefined") return null;
     pca = new window.msal.PublicClientApplication({
-      auth: { clientId: C.clientId, authority: authority(), redirectUri: C.redirectUri },
+      auth: { clientId: C.clientId, authority: authority(), redirectUri: redirectUri() },
       cache: { cacheLocation: "sessionStorage" }
     });
     return pca;
@@ -390,7 +400,7 @@
     FM.state.members = [];
     var m = getPca();
     try {
-      if (m && m.logoutPopup) { await m.logoutPopup({ account: account, mainWindowRedirectUri: C.redirectUri }); return; }
+      if (m && m.logoutPopup) { await m.logoutPopup({ account: account, mainWindowRedirectUri: redirectUri() }); return; }
     } catch (e) { /* fall through */ }
     try { sessionStorage.clear(); } catch (e) { /* ignore */ }
     location.reload();
@@ -821,6 +831,11 @@
       if (e.target.closest("[data-reauth]")) FM.reauth();
     });
     FM.checkVersions();
+    if (!redirectUri()) {
+      showScreen("error", "This address isn't set up for sign-in yet: " + currentBase() +
+        " — Add it to redirectUris in config.js, and add it in Azure (PatrolBidPortal → Authentication → Single-page application), spelled exactly the same with the trailing slash.");
+      return;
+    }
     var GUID = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
     if (!GUID.test(String(C.clientId)) || !GUID.test(String(C.tenantId))) {
       showScreen("error", "config.js is missing the clientId or tenantId (each is a 36-character ID). Copy them from the Personnel Support portal's config.js, then reload.");
