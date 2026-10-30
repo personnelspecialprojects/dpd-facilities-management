@@ -7,14 +7,14 @@
 <title>DPD Facilities Management</title>
 <script>
   // Release manifest. Update this and the ?v= values below with every release.
-  window.FM_PAGE_VERSION = "2026.10.23-1";
+  window.FM_PAGE_VERSION = "2026.10.30-1";
   window.FM_EXPECTED_VERSIONS = {
     "activity.js": "2026.10.23-1",
     "admin.js": "2026.10.23-1",
     "audit.js": "2026.10.21-1",
     "checks.js": "2026.10.21-4",
-    "config.js": "2026.10.23-1",
-    "core.js": "2026.10.23-1",
+    "config.js": "2026.10.30-1",
+    "core.js": "2026.10.30-1",
     "reports.js": "2026.10.21-2",
     "setup-check.js": "2026.10.21-4",
     "styles.css": "2026.10.21-4",
@@ -71,8 +71,8 @@
 <div id="modal-root"></div>
 <div id="toast-root" aria-live="polite"></div>
 
-<script src="config.js?v=2026.10.23-1"></script>
-<script src="core.js?v=2026.10.23-1"></script>
+<script src="config.js?v=2026.10.30-1"></script>
+<script src="core.js?v=2026.10.30-1"></script>
 <script src="activity.js?v=2026.10.23-1"></script>
 <script src="admin.js?v=2026.10.23-1"></script>
 <script src="audit.js?v=2026.10.21-1"></script>
@@ -84,7 +84,7 @@
   (function () {
     if (window.FM && window.FM.boot) { window.FM.boot(); return; }
     var b = document.getElementById("banner-area");
-    b.innerHTML = '<div class="banner warn"><span>core.js or config.js didn\'t load (missing or cut off). Re-paste it in GitHub, wait a minute, then reload.</span></div>';
+    b.innerHTML = '<div class="banner warn"><span>core.js or config.js didn\'t load (missing or cut off). Re-paste it in GitHub, wait a couple of minutes for it to publish, then reload.</span></div>';
     document.getElementById("screen-loading").hidden = true;
   })();
 </script>
